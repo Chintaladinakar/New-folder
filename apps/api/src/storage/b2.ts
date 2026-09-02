@@ -1,19 +1,24 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'stream';
-import { env } from '../config/env.js';
+import { env, validateB2Config } from '../config/env.js';
 import type { MusicStorage } from './base.js';
 
 export class B2Storage implements MusicStorage {
   private client: S3Client;
 
   constructor() {
+    const config = validateB2Config();
+    if (!config.ok) {
+      throw new Error(`Missing Backblaze B2 configuration: ${config.missing.join(', ')}`);
+    }
+
     this.client = new S3Client({
       region: env.b2Region,
       endpoint: env.b2Endpoint,
       credentials: {
-        accessKeyId: env.b2AccessKeyId,
-        secretAccessKey: env.b2SecretAccessKey,
+        accessKeyId: env.b2KeyId,
+        secretAccessKey: env.b2ApplicationKey,
       },
       forcePathStyle: false,
     });
@@ -24,7 +29,7 @@ export class B2Storage implements MusicStorage {
 
     await this.client.send(
       new PutObjectCommand({
-        Bucket: env.b2Bucket,
+        Bucket: env.b2BucketName,
         Key: key,
         Body: body,
         ContentType: contentType,
@@ -36,7 +41,7 @@ export class B2Storage implements MusicStorage {
 
   async delete(key: string): Promise<void> {
     await this.client.send({
-      Bucket: env.b2Bucket,
+      Bucket: env.b2BucketName,
       Key: key,
       Delete: { Objects: [{ Key: key }] },
     } as never);
@@ -46,7 +51,7 @@ export class B2Storage implements MusicStorage {
     try {
       await this.client.send(
         new HeadObjectCommand({
-          Bucket: env.b2Bucket,
+          Bucket: env.b2BucketName,
           Key: key,
         }),
       );
@@ -58,7 +63,7 @@ export class B2Storage implements MusicStorage {
 
   async getSignedUrl(key: string, expiresIn = env.b2SignedUrlTtlSeconds): Promise<string> {
     const command = new GetObjectCommand({
-      Bucket: env.b2Bucket,
+      Bucket: env.b2BucketName,
       Key: key,
     });
 
@@ -69,11 +74,26 @@ export class B2Storage implements MusicStorage {
 
   async getObject(key: string): Promise<Readable> {
     const command = new GetObjectCommand({
-      Bucket: env.b2Bucket,
+      Bucket: env.b2BucketName,
       Key: key,
     });
 
     const response = await this.client.send(command);
     return response.Body as Readable;
+  }
+
+  async testConnection(): Promise<{ ok: boolean; bucket: string; region: string; status: string }> {
+    await this.client.send(
+      new HeadBucketCommand({
+        Bucket: env.b2BucketName,
+      }),
+    );
+
+    return {
+      ok: true,
+      bucket: env.b2BucketName,
+      region: env.b2Region,
+      status: 'accessible',
+    };
   }
 }

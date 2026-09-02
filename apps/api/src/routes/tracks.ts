@@ -6,18 +6,35 @@ import { TrackService } from '../services/trackService.js';
 import { B2Storage } from '../storage/b2.js';
 
 const router = Router();
+const allowedAudioMimeTypes = new Set([
+  'audio/aac',
+  'audio/flac',
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/ogg',
+  'audio/opus',
+  'audio/wav',
+  'audio/wave',
+  'audio/webm',
+  'audio/x-flac',
+  'audio/x-m4a',
+  'audio/x-mpeg',
+  'audio/x-wav',
+]);
+const allowedAudioExtensions = new Set(['.aac', '.flac', '.m4a', '.mp3', '.oga', '.ogg', '.opus', '.wav', '.webm']);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: (env.uploadMaxSizeMb ?? 100) * 1024 * 1024,
   },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['audio/mpeg', 'audio/mp3', 'audio/x-mpeg', 'audio/mpg'];
-    if (allowed.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.mp3')) {
+    const extension = file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase();
+    if (allowedAudioMimeTypes.has(file.mimetype) || allowedAudioExtensions.has(extension)) {
       cb(null, true);
       return;
     }
-    cb(new Error('Only MP3 files are supported'));
+    cb(new Error('Supported music formats: AAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WEBM'));
   },
 });
 

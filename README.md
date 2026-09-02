@@ -9,7 +9,7 @@ This repository contains the Phase 1 implementation only:
 - Node.js API
 - PostgreSQL database connection and schema
 - Backblaze B2 storage abstraction
-- MP3 upload flow
+- Multi-format music upload flow
 - Track listing API
 - Basic library page
 - Basic audio playback
@@ -80,13 +80,13 @@ PORT=4000
 API_BASE_URL=http://localhost:4000/api
 WEB_PORT=5173
 
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/personal_mp3_player
+DATABASE_URL=postgresql://neondb_owner:your-password@ep-example.us-east-2.aws.neon.tech/neondb?sslmode=require
 
 B2_ENDPOINT=https://s3.us-east-005.backblazeb2.com
 B2_REGION=us-east-005
-B2_BUCKET=personal-mp3-player
-B2_ACCESS_KEY_ID=your-b2-key-id
-B2_SECRET_ACCESS_KEY=your-b2-application-key
+B2_BUCKET_NAME=personal-mp3-player
+B2_KEY_ID=your-b2-key-id
+B2_APPLICATION_KEY=your-b2-application-key
 B2_PUBLIC_URL=https://<public-domain>/
 B2_SIGNED_URL_TTL_SECONDS=3600
 
@@ -96,17 +96,13 @@ UPLOAD_MAX_SIZE_MB=100
 
 ## 5. Database setup
 
-1. Start PostgreSQL.
-2. Create a database:
-
-```sql
-CREATE DATABASE personal_mp3_player;
-```
-
-3. Apply the schema:
+1. Create a Neon Postgres project.
+2. Copy the connection string from the Neon dashboard.
+3. Add it to `.env` as `DATABASE_URL`.
+4. Apply the schema to the Neon database:
 
 ```bash
-psql -d personal_mp3_player -f database/schema/001_tracks.sql
+psql "<your-neon-connection-string>" -f database/schema/001_tracks.sql
 ```
 
 The schema creates the `tracks` table with columns for metadata and storage information.
@@ -149,12 +145,14 @@ Open:
 http://localhost:5173
 ```
 
-## 9. Upload the first MP3
+## 9. Upload the first music file
 
 1. Open the web app.
 2. Navigate to the library page.
 3. Use the upload form to choose an MP3 file.
 4. The backend validates the file, extracts metadata, uploads to Backblaze B2, and stores the metadata in PostgreSQL.
+
+Supported formats: AAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WEBM.
 
 ## 10. How to test playback
 

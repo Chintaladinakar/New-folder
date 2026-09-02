@@ -83,8 +83,13 @@ export default function App() {
             <p className="text-sm text-slate-400">Phase 1 library and playback</p>
           </div>
           <label className="cursor-pointer rounded bg-violet-600 px-4 py-2 text-sm font-medium hover:bg-violet-500">
-            Upload MP3
-            <input type="file" accept="audio/mpeg,.mp3" className="hidden" onChange={handleUpload} />
+            Upload music
+            <input
+              type="file"
+              accept=".aac,.flac,.m4a,.mp3,.oga,.ogg,.opus,.wav,.webm,audio/*"
+              className="hidden"
+              onChange={handleUpload}
+            />
           </label>
         </div>
       </header>
@@ -105,7 +110,7 @@ export default function App() {
             <div className="mt-6 rounded border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>
           ) : tracks.length === 0 ? (
             <div className="mt-6 rounded border border-dashed border-slate-700 p-8 text-center text-slate-400">
-              No MP3 files uploaded yet.
+              No music files uploaded yet.
             </div>
           ) : (
             <div className="mt-6 overflow-hidden rounded-lg border border-slate-800">
