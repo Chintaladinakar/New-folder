@@ -181,7 +181,7 @@ This project intentionally delivers the Phase 1 foundation only. The architectur
 
 ## 13. Deploying to Vercel
 
-Create one Vercel project linked to the repository root. The checked-in `vercel.json` builds the React app from `apps/web` and exposes the Express API as a Vercel Function at `/api`.
+Create one Vercel project linked to the repository root. In Vercel Project Settings, set **Root Directory** to `.` (the folder containing `package.json` and `vercel.json`), then set **Build Command** to `npm run build:web`. Do not set the Root Directory to `apps/api`; that makes Vercel run the root command inside the API workspace and produces a `Missing script: build:web` error. The checked-in `vercel.json` builds the React app from `apps/web` and exposes the Express API as a Vercel Function at `/api`.
 
 Set these Vercel environment variables for Production (and Preview if needed):
 
