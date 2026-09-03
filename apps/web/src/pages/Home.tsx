@@ -4,7 +4,7 @@ import { Clock, Heart, PlusSquare, Play } from 'lucide-react';
 import { usePlayerStore } from '../stores/playerStore';
 import type { Track } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export function Home() {
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);

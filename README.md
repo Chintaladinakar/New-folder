@@ -178,3 +178,23 @@ GET /api/tracks/:id/stream
 ## 12. Notes
 
 This project intentionally delivers the Phase 1 foundation only. The architecture is designed so later phases can add playlisting, authentication, metadata enrichment, and OneDrive backup without rewriting the core storage and API separation.
+
+## 13. Deploying to Vercel
+
+Create one Vercel project linked to the repository root. The checked-in `vercel.json` builds the React app from `apps/web` and exposes the Express API as a Vercel Function at `/api`.
+
+Set these Vercel environment variables for Production (and Preview if needed):
+
+```env
+DATABASE_URL=postgresql://...
+B2_ENDPOINT=https://s3.us-east-005.backblazeb2.com
+B2_REGION=us-east-005
+B2_BUCKET_NAME=your-bucket
+B2_KEY_ID=your-key-id
+B2_APPLICATION_KEY=your-application-key
+B2_PUBLIC_URL=https://your-public-b2-domain/
+B2_SIGNED_URL_TTL_SECONDS=3600
+UPLOAD_MAX_SIZE_MB=100
+```
+
+Do not set `VITE_API_BASE_URL` for a single-project deployment; the web app uses the same-origin `/api` path automatically. Set it to the public API URL only when deploying the web app and API as separate Vercel projects. After deployment, verify `https://<your-domain>/api/health` before uploading tracks.
