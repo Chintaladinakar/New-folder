@@ -179,9 +179,9 @@ GET /api/tracks/:id/stream
 
 This project intentionally delivers the Phase 1 foundation only. The architecture is designed so later phases can add playlisting, authentication, metadata enrichment, and OneDrive backup without rewriting the core storage and API separation.
 
-## 13. Deploying to Vercel
+## 13. Deploying the frontend to Vercel
 
-Create one Vercel project linked to the repository root. In Vercel Project Settings, set **Root Directory** to `.` (the folder containing `package.json` and `vercel.json`), then set **Build Command** to `npm run build:web`. Do not set the Root Directory to `apps/api`; that makes Vercel run the root command inside the API workspace and produces a `Missing script: build:web` error. The checked-in `vercel.json` builds the React app from `apps/web` and exposes the Express API as a Vercel Function at `/api`.
+Create a Vercel project linked to this repository. In Vercel Project Settings, set **Root Directory** to `apps/web`. The `apps/web/vercel.json` file builds and serves only the React frontend. Do not use the repository-root Vercel configuration for this deployment.
 
 Set these Vercel environment variables for Production (and Preview if needed):
 
@@ -197,4 +197,14 @@ B2_SIGNED_URL_TTL_SECONDS=3600
 UPLOAD_MAX_SIZE_MB=100
 ```
 
-Do not set `VITE_API_BASE_URL` for a single-project deployment; the web app uses the same-origin `/api` path automatically. Set it to the public API URL only when deploying the web app and API as separate Vercel projects. Uploads use a presigned URL: the browser sends the file directly to Backblaze B2, avoiding Vercel's Function request-body limit. Configure the B2 bucket CORS policy to allow `PUT` from your Vercel web origin. After deployment, verify `https://<your-domain>/api/health` before uploading tracks.
+Set this Vercel environment variable to the public URL of the separately deployed API:
+
+```env
+VITE_API_BASE_URL=https://your-api.onrender.com/api
+```
+
+The API must allow the Vercel frontend origin through CORS. Uploads use a presigned URL: the browser sends the file directly to Backblaze B2, avoiding Vercel's Function request-body limit. Configure the B2 bucket CORS policy to allow `PUT` from your Vercel web origin. After deployment, verify `https://your-api.onrender.com/api/health` before uploading tracks.
+
+### Render API service
+
+For a Render Web Service, leave **Root Directory** empty (repository root), use `npm run build:api` as the build command, and `npm start` as the start command. Alternatively, set Root Directory to `apps/api`, use `npm install && npm run build`, and use `npm start`. Render should provide the `PORT` environment variable; the API listens on it automatically.
