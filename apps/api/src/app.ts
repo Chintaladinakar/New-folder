@@ -15,6 +15,11 @@ const b2Storage = (() => {
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'personal-mp3-player-api', health: '/api/health' });
+});
+
 app.use('/api/tracks', tracksRouter);
 
 app.get('/api/health', (_req, res) => {
