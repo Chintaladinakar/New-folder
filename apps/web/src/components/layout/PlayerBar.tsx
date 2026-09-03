@@ -6,7 +6,8 @@ import {
 import { usePlayerStore } from '../../stores/playerStore';
 import { Link } from 'react-router-dom';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
+const API_BASE_URL = configuredApiBaseUrl?.endsWith('/api') ? configuredApiBaseUrl : `${configuredApiBaseUrl ?? ''}/api`;
 
 export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement>(null);
