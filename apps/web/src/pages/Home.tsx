@@ -4,7 +4,8 @@ import { Clock, Heart, PlusSquare, Play } from 'lucide-react';
 import { usePlayerStore } from '../stores/playerStore';
 import type { Track } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
+const API_BASE_URL = configuredApiBaseUrl?.endsWith('/api') ? configuredApiBaseUrl : `${configuredApiBaseUrl ?? ''}/api`;
 
 export function Home() {
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);

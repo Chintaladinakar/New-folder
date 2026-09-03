@@ -203,7 +203,18 @@ Set this Vercel environment variable to the public URL of the separately deploye
 VITE_API_BASE_URL=https://your-api.onrender.com/api
 ```
 
-The API must allow the Vercel frontend origin through CORS. Uploads use a presigned URL: the browser sends the file directly to Backblaze B2, avoiding Vercel's Function request-body limit. Configure the B2 bucket CORS policy to allow `PUT` from your Vercel web origin. After deployment, verify `https://your-api.onrender.com/api/health` before uploading tracks.
+The API must allow the Vercel frontend origin through CORS. Uploads use a presigned URL: the browser sends the file directly to Backblaze B2, avoiding Vercel's Function request-body limit. B2 must also allow the browser's preflight and `PUT` request; API CORS headers cannot affect a request sent directly to B2.
+
+The ready-to-apply policy is in [`infra/b2-cors.json`](infra/b2-cors.json). Install/configure the AWS CLI with credentials that can update the bucket, then run:
+
+```bash
+aws s3api put-bucket-cors \
+    --bucket "$B2_BUCKET_NAME" \
+    --endpoint-url "https://s3.us-east-005.backblazeb2.com" \
+    --cors-configuration file://infra/b2-cors.json
+```
+
+Add the actual frontend origin to `AllowedOrigins` if it differs from `https://new-folder-api-beryl.vercel.app`, then redeploy or retry the upload. After deployment, verify `https://your-api.onrender.com/api/health` before uploading tracks.
 
 ### Render API service
 

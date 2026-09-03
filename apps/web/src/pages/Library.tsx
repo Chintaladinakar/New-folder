@@ -4,7 +4,8 @@ import { Library as LibraryIcon, Play, Pause, MoreHorizontal, Upload, Heart } fr
 import { usePlayerStore } from '../stores/playerStore';
 import type { Track } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
+const API_BASE_URL = configuredApiBaseUrl?.endsWith('/api') ? configuredApiBaseUrl : `${configuredApiBaseUrl ?? ''}/api`;
 
 export function Library() {
   const [tracks, setTracks] = useState<Track[]>([]);
