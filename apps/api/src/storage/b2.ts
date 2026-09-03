@@ -39,6 +39,16 @@ export class B2Storage implements MusicStorage {
     return key;
   }
 
+  async getUploadUrl(key: string, contentType: string): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: env.b2BucketName,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn: env.b2SignedUrlTtlSeconds });
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.send({
       Bucket: env.b2BucketName,

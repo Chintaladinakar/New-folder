@@ -197,4 +197,4 @@ B2_SIGNED_URL_TTL_SECONDS=3600
 UPLOAD_MAX_SIZE_MB=100
 ```
 
-Do not set `VITE_API_BASE_URL` for a single-project deployment; the web app uses the same-origin `/api` path automatically. Set it to the public API URL only when deploying the web app and API as separate Vercel projects. After deployment, verify `https://<your-domain>/api/health` before uploading tracks.
+Do not set `VITE_API_BASE_URL` for a single-project deployment; the web app uses the same-origin `/api` path automatically. Set it to the public API URL only when deploying the web app and API as separate Vercel projects. Uploads use a presigned URL: the browser sends the file directly to Backblaze B2, avoiding Vercel's Function request-body limit. Configure the B2 bucket CORS policy to allow `PUT` from your Vercel web origin. After deployment, verify `https://<your-domain>/api/health` before uploading tracks.

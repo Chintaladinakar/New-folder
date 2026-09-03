@@ -40,7 +40,13 @@ const upload = multer({
 
 const trackService = new TrackService();
 const metadataService = new MetadataService();
-const storage = new B2Storage();
+const storage = (() => {
+  try {
+    return new B2Storage();
+  } catch {
+    return null;
+  }
+})();
 
 router.get('/health', (_req, res) => {
   res.json({ ok: true, status: 'healthy' });
@@ -52,6 +58,67 @@ router.get('/', async (_req, res) => {
     res.json({ tracks });
   } catch (error) {
     res.status(500).json({ message: 'Failed to list tracks', error: (error as Error).message });
+  }
+});
+
+router.post('/upload-url', async (req, res) => {
+  try {
+    if (!storage) {
+      res.status(503).json({ message: 'Backblaze B2 storage is not configured' });
+      return;
+    }
+
+    const { fileName, contentType } = req.body as { fileName?: string; contentType?: string };
+    if (!fileName) {
+      res.status(400).json({ message: 'File name is required' });
+      return;
+    }
+
+    const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storageKey = `tracks/${Date.now()}-${safeFileName}`;
+    const mimeType = contentType || 'audio/mpeg';
+    const uploadUrl = await storage.getUploadUrl(storageKey, mimeType);
+    res.json({ uploadUrl, storageKey, mimeType });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to create upload URL', error: (error as Error).message });
+  }
+});
+
+router.post('/complete-upload', async (req, res) => {
+  try {
+    if (!storage) {
+      res.status(503).json({ message: 'Backblaze B2 storage is not configured' });
+      return;
+    }
+
+    const input = req.body as {
+      fileName?: string;
+      storageKey?: string;
+      mimeType?: string;
+      fileSize?: number;
+      title?: string;
+    };
+    if (!input.fileName || !input.storageKey || !input.fileSize) {
+      res.status(400).json({ message: 'File name, storage key, and file size are required' });
+      return;
+    }
+
+    if (!(await storage.exists(input.storageKey))) {
+      res.status(400).json({ message: 'Uploaded file was not found in storage' });
+      return;
+    }
+
+    const track = await trackService.createTrack({
+      fileName: input.fileName,
+      storageKey: input.storageKey,
+      mimeType: input.mimeType || 'audio/mpeg',
+      fileSize: input.fileSize,
+      title: input.title || input.fileName.replace(/\.[^/.]+$/, ''),
+    });
+
+    res.status(201).json({ message: 'Track uploaded successfully', track });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to save uploaded track', error: (error as Error).message });
   }
 });
 
@@ -71,6 +138,11 @@ router.get('/:id', async (req, res) => {
 
 router.get('/:id/stream', async (req, res) => {
   try {
+    if (!storage) {
+      res.status(503).json({ message: 'Backblaze B2 storage is not configured' });
+      return;
+    }
+
     const track = await trackService.getTrackById(req.params.id);
     if (!track) {
       res.status(404).json({ message: 'Track not found' });
@@ -86,6 +158,11 @@ router.get('/:id/stream', async (req, res) => {
 
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
+    if (!storage) {
+      res.status(503).json({ message: 'Backblaze B2 storage is not configured' });
+      return;
+    }
+
     if (!req.file) {
       res.status(400).json({ message: 'No file uploaded' });
       return;

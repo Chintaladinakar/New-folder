@@ -14,4 +14,8 @@ async function start() {
   }
 }
 
-start();
+if (process.env.VERCEL !== '1') {
+  void start();
+}
+
+export default app;

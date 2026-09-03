@@ -38,21 +38,44 @@ export function Library() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const response = await fetch(`${API_BASE_URL}/tracks/upload`, {
+      const uploadResponse = await fetch(`${API_BASE_URL}/tracks/upload-url`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type }),
       });
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({ message: 'Upload failed' }));
+      if (!uploadResponse.ok) {
+        const payload = await uploadResponse.json().catch(() => ({ message: 'Upload failed' }));
         throw new Error(payload.message ?? 'Upload failed');
       }
 
-      const data = await response.json();
+      const upload = await uploadResponse.json();
+      const fileResponse = await fetch(upload.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': upload.mimeType },
+        body: file,
+      });
+      if (!fileResponse.ok) {
+        throw new Error('Failed to upload file to storage');
+      }
+
+      const completeResponse = await fetch(`${API_BASE_URL}/tracks/complete-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          storageKey: upload.storageKey,
+          mimeType: upload.mimeType,
+          fileSize: file.size,
+        }),
+      });
+      if (!completeResponse.ok) {
+        const payload = await completeResponse.json().catch(() => ({ message: 'Upload failed' }));
+        throw new Error(payload.message ?? 'Upload failed');
+      }
+
+      const data = await completeResponse.json();
       const nextTrack = data.track;
       setTracks((current) => [nextTrack, ...current]);
       event.target.value = '';
