@@ -17,17 +17,26 @@ export type MetadataExtractionResult = {
 export class MetadataService {
   async extractMetadata(file: Express.Multer.File): Promise<MetadataExtractionResult> {
     const metadata = await mm.parseBuffer(file.buffer, file.mimetype || 'audio/mpeg');
+    return this.mapMetadata(metadata, file.originalname);
+  }
+
+  async extractMetadataFromStream(stream: import('stream').Readable, mimeType: string, originalName: string): Promise<MetadataExtractionResult> {
+    const metadata = await mm.parseStream(stream, { mimeType });
+    return this.mapMetadata(metadata, originalName);
+  }
+
+  private mapMetadata(metadata: mm.IAudioMetadata, originalName: string): MetadataExtractionResult {
     const common = metadata.common;
     const trackNumber = this.parseNumber(common.track?.no);
     const discNumber = this.parseNumber(common.disk?.no);
-    const title = common.title ?? this.fromFilename(file.originalname, 'title');
+    const title = common.title ?? this.fromFilename(originalName, 'title');
     const artist = common.artist ?? null;
     const album = common.album ?? null;
     const albumArtist = common.albumartist ?? null;
     const genre = common.genre?.[0] ?? null;
     const year = this.parseYear(common.year);
     const duration = metadata.format.duration ?? null;
-    const artworkUrl = this.extractArtwork(common.picture, file.originalname);
+    const artworkUrl = this.extractArtwork(common.picture, originalName);
 
     return {
       title,

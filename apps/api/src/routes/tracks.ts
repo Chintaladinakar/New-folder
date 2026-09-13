@@ -108,12 +108,25 @@ router.post('/complete-upload', async (req, res) => {
       return;
     }
 
+    const stream = await storage.getObject(input.storageKey);
+    const mimeType = input.mimeType || 'audio/mpeg';
+    const metadata = await metadataService.extractMetadataFromStream(stream, mimeType, input.fileName);
+
     const track = await trackService.createTrack({
       fileName: input.fileName,
       storageKey: input.storageKey,
-      mimeType: input.mimeType || 'audio/mpeg',
+      mimeType,
       fileSize: input.fileSize,
-      title: input.title || input.fileName.replace(/\.[^/.]+$/, ''),
+      title: metadata.title,
+      artist: metadata.artist,
+      album: metadata.album,
+      albumArtist: metadata.albumArtist,
+      genre: metadata.genre,
+      year: metadata.year,
+      duration: metadata.duration ? Math.round(metadata.duration) : null,
+      trackNumber: metadata.trackNumber,
+      discNumber: metadata.discNumber,
+      artworkUrl: metadata.artworkUrl,
     });
 
     res.status(201).json({ message: 'Track uploaded successfully', track });
