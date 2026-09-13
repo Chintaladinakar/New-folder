@@ -11,6 +11,8 @@ export function Library() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   
   const { currentTrack, isPlaying, setIsPlaying, setCurrentTrack, setQueue } = usePlayerStore();
 
@@ -40,6 +42,10 @@ export function Library() {
     if (!file) return;
 
     try {
+      setUploadingFile(file.name);
+      setUploadProgress(0);
+      setError(null);
+
       const uploadResponse = await fetch(`${API_BASE_URL}/tracks/upload-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,10 +62,33 @@ export function Library() {
         method: 'PUT',
         headers: { 'Content-Type': upload.mimeType },
         body: file,
+      
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', upload.uploadUrl);
+        xhr.setRequestHeader('Content-Type', upload.mimeType);
+        
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(xhr);
+          } else {
+            reject(new Error('Failed to upload file to storage'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(file);
       });
       if (!fileResponse.ok) {
         throw new Error('Failed to upload file to storage');
       }
+
+      setUploadProgress(100);
 
       const completeResponse = await fetch(`${API_BASE_URL}/tracks/complete-upload`, {
         method: 'POST',
@@ -82,6 +111,9 @@ export function Library() {
       event.target.value = '';
     } catch (uploadError) {
       setError((uploadError as Error).message);
+    } finally {
+      setUploadingFile(null);
+      setUploadProgress(0);
     }
   };
 
@@ -118,6 +150,21 @@ export function Library() {
           />
         </label>
       </div>
+
+      {uploadingFile && (
+        <div className="mb-6 rounded-md border border-violet-500/30 bg-violet-500/10 p-4">
+          <div className="flex justify-between text-sm mb-2 text-violet-200">
+            <span>Uploading: <span className="font-medium text-white">{uploadingFile}</span></span>
+            <span className="font-mono">{uploadProgress}%</span>
+          </div>
+          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-violet-500 h-2 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${uploadProgress}%` }}
+            ></div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
