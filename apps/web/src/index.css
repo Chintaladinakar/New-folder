@@ -2,29 +2,626 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Theme tokens. RGB triplets so Tailwind can apply opacity (rgb(var(--x) / 0.5)).
+   Each theme is a single warm grey family, and shadows (--c-shade) share its hue.
+   --------------------------------------------------------------------------- */
+:root,
+:root[data-theme='dark'] {
+  --c-base: 17 16 14;
+  --c-surface: 24 23 21;
+  --c-surface-2: 34 32 29;
+  --c-surface-3: 47 44 40;
+  --c-edge: 44 41 37;
+  --c-fg: 240 235 227;
+  --c-muted: 168 160 149;
+  --c-faint: 142 135 126;
+  --c-shade: 4 3 2;
+  --c-accent-fg: 20 18 15;
+  --c-danger: 248 113 113;
+  --c-success: 110 200 140;
+  --c-warning: 230 180 80;
+  --grain: 0.05;
+  --art-s: 14%;
+  --art-l: 21%;
+  --art-ink: 70%;
+  color-scheme: dark;
+}
+
+:root[data-theme='oled'] {
+  --c-base: 0 0 0;
+  --c-surface: 11 10 9;
+  --c-surface-2: 22 21 19;
+  --c-surface-3: 36 34 31;
+  --c-edge: 32 30 27;
+  --c-fg: 242 238 232;
+  --c-muted: 160 153 144;
+  --c-faint: 132 126 118;
+  --c-shade: 0 0 0;
+  --c-accent-fg: 20 18 15;
+  --c-danger: 248 113 113;
+  --c-success: 110 200 140;
+  --c-warning: 230 180 80;
+  /* OLED black stays black: no grain. */
+  --grain: 0;
+  --art-s: 12%;
+  --art-l: 16%;
+  --art-ink: 68%;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --c-base: 244 241 234;
+  --c-surface: 251 249 245;
+  --c-surface-2: 234 230 222;
+  --c-surface-3: 222 216 205;
+  --c-edge: 220 214 203;
+  --c-fg: 28 25 21;
+  --c-muted: 80 74 66;
+  --c-faint: 106 99 89;
+  --c-shade: 74 58 40;
+  --c-accent-fg: 255 255 255;
+  --c-danger: 185 28 28;
+  --c-success: 21 128 61;
+  --c-warning: 161 98 7;
+  --grain: 0.06;
+  --art-s: 22%;
+  --art-l: 84%;
+  --art-ink: 34%;
+  color-scheme: light;
+}
+
+/* Accents. Dark themes use bright inks (with dark text on fills); paper uses deep inks (with
+   white text), so text in the accent colour stays above 4.5:1 on either background.
+   Any element can carry data-accent, which lets the settings swatches show the real colour. */
+:root,
+[data-accent='orange'] {
+  --c-accent: 240 110 70;
+}
+[data-accent='amber'] {
+  --c-accent: 230 170 70;
+}
+[data-accent='emerald'] {
+  --c-accent: 80 185 135;
+}
+[data-accent='cyan'] {
+  --c-accent: 70 180 195;
+}
+[data-accent='blue'] {
+  --c-accent: 110 150 245;
+}
+[data-accent='violet'] {
+  --c-accent: 160 135 245;
+}
+[data-accent='rose'] {
+  --c-accent: 240 95 115;
+}
+[data-accent='pink'] {
+  --c-accent: 235 120 175;
+}
+
+:root[data-theme='light'],
+[data-theme='light'][data-accent='orange'],
+[data-theme='light'] [data-accent='orange'] {
+  --c-accent: 174 56 24;
+}
+[data-theme='light'][data-accent='amber'],
+[data-theme='light'] [data-accent='amber'] {
+  --c-accent: 138 87 5;
+}
+[data-theme='light'][data-accent='emerald'],
+[data-theme='light'] [data-accent='emerald'] {
+  --c-accent: 15 111 76;
+}
+[data-theme='light'][data-accent='cyan'],
+[data-theme='light'] [data-accent='cyan'] {
+  --c-accent: 5 107 127;
+}
+[data-theme='light'][data-accent='blue'],
+[data-theme='light'] [data-accent='blue'] {
+  --c-accent: 45 90 200;
+}
+[data-theme='light'][data-accent='violet'],
+[data-theme='light'] [data-accent='violet'] {
+  --c-accent: 105 70 200;
+}
+[data-theme='light'][data-accent='rose'],
+[data-theme='light'] [data-accent='rose'] {
+  --c-accent: 186 39 68;
+}
+[data-theme='light'][data-accent='pink'],
+[data-theme='light'] [data-accent='pink'] {
+  --c-accent: 172 48 114;
+}
+
 :root {
-  font-family: Inter, system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --art-h: 30;
+
+  font-family: 'Geist Variable', Geist, system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.87);
-  background: #020617;
+  color: rgb(var(--c-fg));
+  background: rgb(var(--c-base));
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   margin: 0;
   min-height: 100%;
-  min-width: 100%;
-  background: #020617;
+  background: rgb(var(--c-base));
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
 }
 
-button, input {
+/* Paper grain: one static noise tile over everything, too faint to read as anything but texture. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px;
+}
+
+button,
+input,
+select,
+textarea {
   font: inherit;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  background: rgb(var(--c-accent) / 0.3);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--c-surface-3)) transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Components
+   --------------------------------------------------------------------------- */
+@layer components {
+  /* The page column: generous margins that grow with the screen. */
+  .page {
+    @apply mx-auto w-full max-w-[1440px] px-5 pb-10 pt-6 sm:px-8 md:pt-10 lg:px-12;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-ghost {
+    @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-50;
+    transition:
+      transform 160ms var(--ease-out),
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      opacity 160ms ease,
+      filter 160ms ease;
+  }
+  .btn-sm {
+    @apply h-8 gap-1.5 px-3 text-xs;
+  }
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .btn-danger:active:not(:disabled),
+  .btn-ghost:active:not(:disabled),
+  .icon-btn:active:not(:disabled),
+  .pressable:active {
+    transform: scale(0.97);
+  }
+  .btn-primary {
+    @apply bg-accent text-accent-fg [&:not(:disabled):hover]:brightness-110;
+  }
+  .btn-secondary {
+    @apply border border-edge text-fg [&:not(:disabled):hover]:border-faint/60 [&:not(:disabled):hover]:bg-surface-2/70;
+  }
+  .btn-ghost {
+    @apply text-muted [&:not(:disabled):hover]:bg-surface-2/70 [&:not(:disabled):hover]:text-fg;
+  }
+  .btn-danger {
+    @apply bg-danger text-inverse [&:not(:disabled):hover]:brightness-110;
+  }
+
+  .icon-btn {
+    @apply inline-flex shrink-0 items-center justify-center rounded-full p-2 text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40;
+    transition:
+      transform 160ms var(--ease-out),
+      color 160ms ease,
+      background-color 160ms ease;
+  }
+  .icon-btn:not(:disabled):hover {
+    @apply text-fg;
+  }
+
+  .input {
+    @apply block w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-fg placeholder:text-faint focus:border-accent/70 focus:outline-none focus:ring-2 focus:ring-accent/20;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-muted;
+  }
+
+  /* Selection is shown in ink (fg); the accent is kept for playback and primary actions. */
+  .chip {
+    @apply inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-edge px-2.5 text-xs font-medium text-muted hover:border-faint/70 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent;
+    transition:
+      transform 160ms var(--ease-out),
+      background-color 160ms ease,
+      color 160ms ease,
+      border-color 160ms ease;
+  }
+  .chip[aria-pressed='true'],
+  .chip[data-active='true'] {
+    @apply border-fg bg-fg text-inverse hover:text-inverse;
+  }
+  .chip:active {
+    transform: scale(0.96);
+  }
+
+  .tab {
+    @apply relative inline-flex h-11 shrink-0 items-center whitespace-nowrap text-sm font-medium text-muted transition-colors duration-150 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent;
+  }
+  .tab[aria-selected='true'],
+  .tab[aria-current='page'] {
+    @apply text-fg;
+  }
+
+  .segmented {
+    @apply inline-flex rounded-lg border border-edge p-0.5;
+  }
+  .segmented > button {
+    @apply relative h-7 rounded-md px-3 text-xs font-medium text-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent;
+    transition: color 160ms ease;
+  }
+  .segmented > button[aria-pressed='true'] {
+    @apply text-inverse;
+  }
+
+  .swatch {
+    @apply relative flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg ring-offset-2 ring-offset-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent;
+    transition: transform 160ms var(--ease-out);
+  }
+  .swatch[aria-pressed='true'] {
+    @apply ring-2 ring-fg;
+  }
+  .swatch:active {
+    transform: scale(0.9);
+  }
+
+  .kbd {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-edge bg-surface-2 px-1.5 font-mono text-[10px] text-muted;
+  }
+
+  /* Range inputs: a tall, easy-to-hit input with a slim track painted as its background. */
+  .range {
+    @apply h-4 cursor-pointer appearance-none bg-transparent disabled:cursor-default;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 3px;
+  }
+  .range-lg {
+    background-size: 100% 4px;
+  }
+  .range::-webkit-slider-thumb {
+    @apply h-3 w-3 appearance-none rounded-full bg-fg;
+    box-shadow: 0 1px 3px rgb(var(--c-shade) / 0.45);
+    transition: transform 160ms var(--ease-out);
+  }
+  .range::-moz-range-thumb {
+    @apply h-3 w-3 rounded-full border-0 bg-fg;
+    transition: transform 160ms var(--ease-out);
+  }
+  .range::-moz-range-track {
+    background: transparent;
+  }
+  .range:active::-webkit-slider-thumb {
+    transform: scale(1.25);
+  }
+  .range:active::-moz-range-thumb {
+    transform: scale(1.25);
+  }
+}
+
+/* Sliders thicken while held, like a bar pressed under a finger. */
+.range {
+  transition: background-size 220ms var(--ease-out);
+}
+.range:active:not(:disabled) {
+  background-size: 100% 6px;
+}
+.range-lg:active:not(:disabled) {
+  background-size: 100% 9px;
+}
+/* On touch screens the big scrubber is a bar with no knob, unless reached by keyboard. */
+@media (hover: none) {
+  .range-lg:not(:focus-visible)::-webkit-slider-thumb {
+    opacity: 0;
+  }
+  .range-lg:not(:focus-visible)::-moz-range-thumb {
+    opacity: 0;
+  }
+}
+
+/* Slim sliders show their thumb only while pointed at; touch screens always show it. */
+@media (hover: hover) and (pointer: fine) {
+  .range-reveal:not(:hover):not(:focus-visible):not(:active)::-webkit-slider-thumb {
+    transform: scale(0);
+  }
+  .range-reveal:not(:hover):not(:focus-visible):not(:active)::-moz-range-thumb {
+    transform: scale(0);
+  }
+}
+
+/* Hover-only effects stay off touch screens, where a tap would trigger them. */
+@media (hover: hover) and (pointer: fine) {
+  .row-hover:hover {
+    background: rgb(var(--c-fg) / 0.04);
+  }
+  .lift:hover {
+    transform: translateY(-3px);
+  }
+  .icon-btn:not(:disabled):hover {
+    background: rgb(var(--c-fg) / 0.07);
+  }
+}
+.lift {
+  transition:
+    transform 240ms var(--ease-out),
+    background-color 160ms ease;
+}
+
+/* Transport buttons: a soft disc grows behind the glyph while it's pressed and the glyph sinks into
+   it. Pressing is quick, letting go is slower, so a tap still reads. */
+.press-halo {
+  position: relative;
+  isolation: isolate;
+}
+.press-halo::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: 9999px;
+  background: rgb(var(--c-fg) / 0.12);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 320ms ease,
+    transform 320ms var(--ease-out);
+}
+.press-halo > * {
+  transition: transform 320ms var(--ease-out);
+}
+.press-halo:active:not(:disabled) {
+  transform: none;
+}
+.press-halo:active:not(:disabled)::before {
+  opacity: 1;
+  transform: scale(1);
+  transition-duration: 90ms;
+}
+.press-halo:active:not(:disabled) > * {
+  transform: scale(0.84);
+  transition-duration: 90ms;
+}
+
+/* The skip glyph is two triangles. Played forward, the front one slides off and shrinks, the back
+   one takes its place and a new one grows in behind: the icon itself moves the way the music does. */
+.skip-glyph path {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.skip-glyph .skip-front {
+  transform: translateX(10.5px);
+}
+.skip-glyph .skip-new {
+  opacity: 0;
+}
+.skip-run .skip-front {
+  animation: skip-out 420ms var(--ease-out);
+}
+.skip-run .skip-back {
+  animation: skip-forward 420ms var(--ease-out);
+}
+.skip-run .skip-new {
+  animation: skip-in 420ms var(--ease-out);
+}
+@keyframes skip-out {
+  from {
+    transform: translateX(10.5px) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(15px) scale(0.2);
+    opacity: 0;
+  }
+}
+@keyframes skip-forward {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(10.5px);
+  }
+}
+@keyframes skip-in {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Synced lyrics. The current line gets the playback time as --t on every frame; each word knows its
+   own start (--ws) and length (--wd), so its progress (--wp) is worked out here with no re-render.
+   The sung part is solid ink with a soft edge that sweeps through the word, which lifts a hair. */
+.lyric-word {
+  display: inline-block;
+  /* Room for ascenders and descenders, which background-clip would otherwise cut off. */
+  padding-block: 0.14em;
+  margin-block: -0.14em;
+}
+.lyric-active .lyric-word {
+  --wp: clamp(0, (var(--t, 0) - var(--ws)) / var(--wd), 1);
+  color: transparent;
+  background-image: linear-gradient(
+    to right,
+    rgb(var(--c-fg)) calc(var(--wp) * (100% + 0.5em) - 0.5em),
+    rgb(var(--c-fg) / 0.35) calc(var(--wp) * (100% + 0.5em))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  transform: translateY(calc(var(--wp) * -0.04em));
+}
+
+/* Instrumental breaks: three dots that light one by one across the break, breathing while they wait. */
+.lyric-dot {
+  opacity: 0.6;
+}
+.lyric-break-active .lyric-dot {
+  opacity: calc(0.22 + 0.78 * clamp(0, (var(--t, 0) - var(--gs)) / var(--gd) * 3 - var(--i), 1));
+}
+.lyric-break-active .lyric-dots {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+/* The cover moves between the mini player (dock, phone card or side panel) and the full player
+   during a view transition (lib/viewTransition.ts). Only one element may carry the name, so the
+   mini player's copy gives it up while it animates away on the full player page. */
+.player-art,
+.player-art-source {
+  view-transition-name: player-artwork;
+}
+[data-now-playing] .player-art-source {
+  view-transition-name: none;
+}
+::view-transition-group(player-artwork) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--ease-drawer);
+}
+::view-transition-old(player-artwork),
+::view-transition-new(player-artwork) {
+  animation-duration: 460ms;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--ease-out);
+}
+
+/* Now Playing: a veil over the moving artwork so text stays readable; paper needs a heavier one. */
+.backdrop-veil {
+  background:
+    linear-gradient(to bottom, rgb(var(--c-base) / 0.05), rgb(var(--c-base) / 0.35)),
+    rgb(var(--c-base) / var(--veil));
+}
+:root,
+:root[data-theme='dark'] {
+  --veil: 0.42;
+}
+:root[data-theme='oled'] {
+  --veil: 0.55;
+}
+:root[data-theme='light'] {
+  --veil: 0.58;
+}
+
+/* Covers without artwork: a muted tone picked from the title (--art-h), with a serif initial. */
+.art-fallback {
+  background: hsl(var(--art-h) var(--art-s) var(--art-l));
+  color: hsl(var(--art-h) 26% var(--art-ink));
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.skip-link {
+  @apply fixed left-3 top-3 z-overlay -translate-y-20 rounded-md bg-fg px-3 py-2 text-sm font-medium text-inverse transition-transform focus:translate-y-0;
+}
+
+/* Staggered entrance for list rows: only the first screenful, so long lists never feel slow. */
+.stagger > * {
+  animation: fade-up 240ms var(--ease-out) both;
+}
+.stagger > *:nth-child(n + 13) {
+  animation-delay: 0ms !important;
+  animation: none;
+}
+
+/* Installed app with the title bar hidden: the top bar becomes the draggable title bar,
+   with room left for the window controls. */
+@media (display-mode: window-controls-overlay) {
+  .titlebar {
+    -webkit-app-region: drag;
+    app-region: drag;
+    padding-left: calc(env(titlebar-area-x, 0px) + 1.5rem);
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 1rem);
+  }
+  .titlebar a,
+  .titlebar button,
+  .titlebar input,
+  .titlebar label {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
+
+/* Reduced motion: keep fades, drop movement. */
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+:root[data-reduce-motion='true'] .lyric-word {
+  transform: none;
 }

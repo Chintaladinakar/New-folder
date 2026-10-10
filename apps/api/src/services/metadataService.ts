@@ -1,5 +1,12 @@
-import * as mm from 'music-metadata';
-import type { IAudioMetadata } from 'music-metadata';
+import { parseStream, type IAudioMetadata } from 'music-metadata';
+import type { Readable } from 'stream';
+import { titleFromFileName } from '../utils/file.js';
+import { lyricsFromTags } from './lyricsService.js';
+
+export type ExtractedPicture = {
+  data: Uint8Array;
+  format: string;
+};
 
 export type MetadataExtractionResult = {
   title: string;
@@ -11,85 +18,70 @@ export type MetadataExtractionResult = {
   duration: number | null;
   trackNumber: number | null;
   discNumber: number | null;
-  artworkUrl: string | null;
+  picture: ExtractedPicture | null;
+  lyrics: string | null;
+  syncedLyrics: string | null;
 };
 
 export class MetadataService {
-  async extractMetadata(file: Express.Multer.File): Promise<MetadataExtractionResult> {
-    const metadata = await mm.parseBuffer(file.buffer, file.mimetype || 'audio/mpeg');
-    return this.mapMetadata(metadata, file.originalname);
+  /**
+   * Reads tags from an audio stream. Passing the size lets the parser estimate the duration of
+   * constant-bitrate MP3s that have no Xing/VBRI header.
+   */
+  async extractMetadataFromStream(
+    stream: Readable,
+    fileInfo: { mimeType: string; size: number },
+    originalName: string,
+  ): Promise<MetadataExtractionResult> {
+    try {
+      const metadata = await parseStream(stream, fileInfo, { skipPostHeaders: true });
+      // For most formats the parser returns empty results instead of throwing on non-audio data.
+      const { container, codec, sampleRate } = metadata.format;
+      if (!container && !codec && !sampleRate) {
+        throw new Error('No audio stream found');
+      }
+      return this.mapMetadata(metadata, originalName);
+    } finally {
+      // The parser stops once it has the tags; release the rest of the download.
+      stream.destroy();
+    }
   }
 
-  async extractMetadataFromStream(stream: import('stream').Readable, mimeType: string, originalName: string): Promise<MetadataExtractionResult> {
-    const metadata = await mm.parseStream(stream, { mimeType });
-    return this.mapMetadata(metadata, originalName);
-  }
-
-  private mapMetadata(metadata: mm.IAudioMetadata, originalName: string): MetadataExtractionResult {
+  mapMetadata(metadata: IAudioMetadata, originalName: string): MetadataExtractionResult {
     const common = metadata.common;
-    const trackNumber = this.parseNumber(common.track?.no);
-    const discNumber = this.parseNumber(common.disk?.no);
-    const title = common.title ?? this.fromFilename(originalName, 'title');
-    const artist = common.artist ?? null;
-    const album = common.album ?? null;
-    const albumArtist = common.albumartist ?? null;
-    const genre = common.genre?.[0] ?? null;
-    const year = this.parseYear(common.year);
-    const duration = metadata.format.duration ?? null;
-    const artworkUrl = this.extractArtwork(common.picture, originalName);
+    const firstPicture = common.picture?.[0];
+    const duration = metadata.format.duration;
 
     return {
-      title,
-      artist,
-      album,
-      albumArtist,
-      genre,
-      year,
-      duration,
-      trackNumber,
-      discNumber,
-      artworkUrl,
+      title: this.cleanText(common.title) ?? titleFromFileName(originalName),
+      artist: this.cleanText(common.artist),
+      album: this.cleanText(common.album),
+      albumArtist: this.cleanText(common.albumartist),
+      genre: this.cleanText(common.genre?.[0]),
+      year: this.parseYear(common.year),
+      duration: typeof duration === 'number' && Number.isFinite(duration) && duration > 0 ? Math.round(duration) : null,
+      trackNumber: this.parsePositiveInt(common.track?.no),
+      discNumber: this.parsePositiveInt(common.disk?.no),
+      picture: firstPicture?.data?.length ? { data: firstPicture.data, format: firstPicture.format } : null,
+      ...lyricsFromTags(common.lyrics),
     };
   }
 
-  private parseNumber(value: unknown): number | null {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string' && value.trim() !== '') {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
+  private cleanText(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.replace(/\0/g, '').trim();
+    return trimmed === '' ? null : trimmed.slice(0, 500);
+  }
+
+  private parsePositiveInt(value: unknown): number | null {
+    const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN;
+    return Number.isInteger(parsed) && parsed > 0 && parsed < 100000 ? parsed : null;
   }
 
   private parseYear(value: unknown): number | null {
-    if (typeof value === 'number') return value;
-    if (Array.isArray(value)) {
-      const first = value[0];
-      if (typeof first === 'number') return first;
-      if (typeof first === 'string') return Number(first) || null;
-    }
-    if (typeof value === 'string') {
-      const match = value.match(/(\d{4})/);
-      return match ? Number(match[1]) : null;
-    }
-    return null;
-  }
-
-  private extractArtwork(pictures: IAudioMetadata['common']['picture'] = [], fileName: string): string | null {
-    const firstPicture = pictures[0];
-    if (!firstPicture) {
-      return null;
-    }
-
-    const base64 = Buffer.from(firstPicture.data).toString('base64');
-    return `data:${firstPicture.format};base64,${base64}`;
-  }
-
-  private fromFilename(fileName: string, mode: 'title'): string {
-    const base = fileName.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
-    if (mode === 'title') {
-      return base || 'Untitled Track';
-    }
-    return 'Untitled Track';
+    const raw = Array.isArray(value) ? value[0] : value;
+    const year =
+      typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.match(/\d{4}/)?.[0] ?? NaN) : NaN;
+    return Number.isInteger(year) && year > 0 && year < 10000 ? year : null;
   }
 }

@@ -1,75 +1,60 @@
-import express from 'express';
 import cors from 'cors';
-import { validateB2Config } from './config/env.js';
-import tracksRouter from './routes/tracks.js';
-import { B2Storage } from './storage/b2.js';
+import express from 'express';
+import { env } from './config/env.js';
+import type { AppDeps } from './deps.js';
+import { errorHandler } from './http/errors.js';
+import { rateLimit, rejectNulBytes, requireAdmin, requireAuth, securityHeaders } from './http/middleware.js';
+import { createAdminRouter } from './routes/admin.js';
+import { createAuthRouter } from './routes/auth.js';
+import { createPublicHealthRouter, createStorageHealthRouter } from './routes/health.js';
+import { createLibraryRouter } from './routes/library.js';
+import { createPlaylistsRouter } from './routes/playlists.js';
+import { createPlaysRouter } from './routes/plays.js';
+import { createRecommendationsRouter } from './routes/recommendations.js';
+import { createTracksRouter } from './routes/tracks.js';
 
-const app = express();
-const b2Storage = (() => {
-  try {
-    return new B2Storage();
-  } catch {
-    return null;
-  }
-})();
+export function createApp(deps: AppDeps, options: { corsOrigins?: string[]; trustProxy?: number } = {}) {
+  const corsOrigins = options.corsOrigins ?? env.corsOrigins;
+  const app = express();
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+  app.disable('x-powered-by');
+  app.set('trust proxy', options.trustProxy ?? env.trustProxy);
+  app.use(securityHeaders);
+  app.use(
+    cors({
+      origin: corsOrigins.length === 0 ? true : (origin, callback) => callback(null, !origin || corsOrigins.includes(origin)),
+      maxAge: 600,
+    }),
+  );
+  app.use(express.json({ limit: '100kb' }));
+  app.use(rejectNulBytes);
 
-app.get('/', (_req, res) => {
-  res.json({ ok: true, service: 'personal-mp3-player-api', health: '/api/health' });
-});
+  app.get('/', (_req, res) => {
+    res.json({ ok: true, service: 'personal-mp3-player-api', health: '/api/health' });
+  });
 
-app.use('/api/tracks', tracksRouter);
+  // Public routes.
+  app.use('/api', createPublicHealthRouter(deps));
+  app.use('/api/auth', createAuthRouter(deps));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, status: 'healthy' });
-});
+  // Everything below needs a signed-in account; routes that change the library also need the admin.
+  app.use(
+    '/api',
+    rateLimit({ windowMs: 60 * 1000, max: 600, message: 'Too many requests. Slow down and try again shortly.' }),
+    requireAuth(deps.auth, deps.users),
+  );
+  app.use('/api', createStorageHealthRouter(deps));
+  app.use('/api', createLibraryRouter(deps));
+  app.use('/api/tracks', createTracksRouter(deps));
+  app.use('/api/plays', createPlaysRouter(deps));
+  app.use('/api/playlists', createPlaylistsRouter(deps));
+  app.use('/api/recommendations', createRecommendationsRouter(deps));
+  app.use('/api/admin', requireAdmin, createAdminRouter(deps));
 
-app.get('/api/storage/b2/health', async (_req, res) => {
-  const configStatus = validateB2Config();
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ message: 'Not found' });
+  });
+  app.use(errorHandler);
 
-  if (!configStatus.ok) {
-    res.status(503).json({
-      ok: false,
-      status: 'misconfigured',
-      missing: configStatus.missing,
-      bucket: null,
-    });
-    return;
-  }
-
-  if (!b2Storage) {
-    res.status(503).json({
-      ok: false,
-      status: 'config_error',
-      missing: configStatus.missing,
-      bucket: null,
-    });
-    return;
-  }
-
-  try {
-    const result = await b2Storage.testConnection();
-    res.json({
-      ok: result.ok,
-      status: result.status,
-      bucket: result.bucket,
-      region: result.region,
-    });
-  } catch (error) {
-    res.status(503).json({
-      ok: false,
-      status: 'unreachable',
-      message: (error as Error).message,
-      bucket: null,
-    });
-  }
-});
-
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
-  res.status(500).json({ message: 'Internal server error', error: err.message });
-});
-
-export default app;
+  return app;
+}

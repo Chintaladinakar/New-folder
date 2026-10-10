@@ -1,7 +1,10 @@
 {
   "name": "personal-mp3-player",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "apps/*"
   ],
@@ -9,11 +12,20 @@
     "dev": "concurrently \"npm run dev --workspace apps/api\" \"npm run dev --workspace apps/web\"",
     "build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
     "build:api": "npm run build --workspace apps/api",
-    "start": "npm start --workspace apps/api",
     "build:web": "npm run build --workspace apps/web",
-    "check": "npm run build --workspace apps/api && npm run build --workspace apps/web"
+    "start": "npm start --workspace apps/api",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspace apps/api && npm run typecheck --workspace apps/web",
+    "test": "npm test --workspace apps/api && npm test --workspace apps/web",
+    "test:e2e": "npm test --workspace apps/e2e",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.71.1"
   }
 }

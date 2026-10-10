@@ -4,30 +4,35 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/local.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/local.js"
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "migrate": "tsx src/scripts/migrate.ts",
+    "backfill": "tsx src/scripts/backfill.ts",
+    "cleanup:orphans": "tsx src/scripts/cleanup-orphans.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.658.0",
     "@aws-sdk/s3-request-presigner": "^3.658.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "mime-types": "^2.1.0",
-    "multer": "^2.0.0",
-    "music-metadata": "^11.0.0",
+    "express": "^5.3.0",
+    "music-metadata": "^11.16.1",
     "pg": "^8.13.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
     "@types/cors": "^2.8.5",
     "@types/express": "^5.0.0",
-    "@types/mime-types": "^2.0.0",
-    "@types/multer": "^2.0.0",
     "@types/node": "^22.7.5",
     "@types/pg": "^8.11.6",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.3.1",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^3.2.7"
   }
 }
