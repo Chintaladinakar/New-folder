@@ -1,247 +1,113 @@
-import { useEffect, useState } from 'react';
-import { EmptyState } from '../components/ui/EmptyState';
-import { Library as LibraryIcon, Play, Pause, MoreHorizontal, Upload, Heart } from 'lucide-react';
-import { usePlayerStore } from '../stores/playerStore';
-import type { Track } from '../types';
-
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
-const API_BASE_URL = configuredApiBaseUrl?.endsWith('/api') ? configuredApiBaseUrl : `${configuredApiBaseUrl ?? ''}/api`;
+import { MagnifyingGlassMinus, MusicNotes, Radio, X } from '@phosphor-icons/react';
+import { useSearchParams } from 'react-router-dom';
+import { FilterBar, SORT_OPTIONS, formatLabel } from '../components/tracks/FilterBar';
+import { TrackListPage } from '../components/tracks/TrackListPage';
+import { UploadButton } from '../components/upload/Upload';
+import { startRadio } from '../hooks/useLibrary';
+import { useIsAdmin } from '../stores/authStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import type { TrackFilters, TrackSort } from '../types';
 
 export function Library() {
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadingFile, setUploadingFile] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  
-  const { currentTrack, isPlaying, setIsPlaying, setCurrentTrack, setQueue } = usePlayerStore();
+  const [params, setParams] = useSearchParams();
+  const isAdmin = useIsAdmin();
+  const defaultSortSetting = useSettingsStore((state) => state.defaultSort);
+  const get = (key: string) => params.get(key)?.trim() || undefined;
+  const number = (key: string) => {
+    const value = Number(get(key));
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+  };
+  const sortParam = get('sort');
+  const filters: TrackFilters = {
+    q: get('q'),
+    artist: get('artist'),
+    album: get('album'),
+    albumArtist: get('albumArtist'),
+    genre: get('genre'),
+    yearFrom: number('yearFrom'),
+    yearTo: number('yearTo'),
+    format: get('format'),
+    favorite: get('favorite') === 'true' ? true : undefined,
+    hasLyrics: get('hasLyrics') === 'true' ? true : undefined,
+    sort: SORT_OPTIONS.some(([value]) => value === sortParam) ? (sortParam as TrackSort) : undefined,
+    reverse: get('reverse') === 'true' ? true : undefined,
+  };
+  const scoped = Boolean(filters.q || filters.artist || filters.album);
+  const defaultSort: TrackSort = filters.album ? 'album-order' : defaultSortSetting;
+  // An artist's own page (not an album or a search within it) gets a radio station.
+  const artistOnly = filters.artist && !filters.album && !filters.q ? filters.artist : undefined;
 
-  const loadTracks = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(`${API_BASE_URL}/tracks`);
-      if (!response.ok) {
-        throw new Error('Failed to load library');
-      }
-      const data = await response.json();
-      setTracks(data.tracks ?? []);
-    } catch (loadError) {
-      setError((loadError as Error).message);
-    } finally {
-      setLoading(false);
+  const update = (changes: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
     }
+    setParams(next, { replace: true });
   };
 
-  useEffect(() => {
-    void loadTracks();
-  }, []);
+  // The title already names the album, artist or search, so only the other filters become chips.
+  const chips: [string, string, string[]][] = [];
+  if (filters.q && (filters.album || filters.artist)) chips.push(['Search', `“${filters.q}”`, ['q']]);
+  if (filters.artist && filters.album) chips.push(['Artist', filters.artist, ['artist']]);
+  if (filters.genre) chips.push(['Genre', filters.genre, ['genre']]);
+  if (filters.yearFrom) chips.push(['Years', `${filters.yearFrom}–${filters.yearTo ?? ''}`, ['yearFrom', 'yearTo']]);
+  if (filters.format) chips.push(['Format', formatLabel(filters.format), ['format']]);
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setUploadingFile(file.name);
-      setUploadProgress(0);
-      setError(null);
-
-      const uploadResponse = await fetch(`${API_BASE_URL}/tracks/upload-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, contentType: file.type }),
-      });
-
-      if (!uploadResponse.ok) {
-        const payload = await uploadResponse.json().catch(() => ({ message: 'Upload failed' }));
-        throw new Error(payload.message ?? 'Upload failed');
-      }
-
-      const upload = await uploadResponse.json();
-      
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', upload.uploadUrl);
-        xhr.setRequestHeader('Content-Type', upload.mimeType);
-        
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setUploadProgress(Math.round((e.loaded / e.total) * 100));
-          }
-        };
-        
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(xhr);
-          } else {
-            reject(new Error('Failed to upload file to storage'));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.send(file);
-      });
-
-      setUploadProgress(100);
-
-      const completeResponse = await fetch(`${API_BASE_URL}/tracks/complete-upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: file.name,
-          storageKey: upload.storageKey,
-          mimeType: upload.mimeType,
-          fileSize: file.size,
-        }),
-      });
-      if (!completeResponse.ok) {
-        const payload = await completeResponse.json().catch(() => ({ message: 'Upload failed' }));
-        throw new Error(payload.message ?? 'Upload failed');
-      }
-
-      const data = await completeResponse.json();
-      const nextTrack = data.track;
-      setTracks((current) => [nextTrack, ...current]);
-      event.target.value = '';
-    } catch (uploadError) {
-      setError((uploadError as Error).message);
-    } finally {
-      setUploadingFile(null);
-      setUploadProgress(0);
-    }
-  };
-
-  const handlePlayTrack = (track: Track) => {
-    if (currentTrack?.id === track.id) {
-      setIsPlaying(!isPlaying);
-    } else {
-      setQueue(tracks);
-      setCurrentTrack(track);
-    }
-  };
-
-  const formatDuration = (seconds: number | null) => {
-    if (!seconds) return '--:--';
-    return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
-  };
+  const title = filters.album ?? filters.artist ?? (filters.q ? `“${filters.q}”` : 'Songs');
+  const eyebrow = filters.album ? 'Album' : filters.artist ? 'Artist' : filters.q ? 'Search results' : undefined;
 
   return (
-    <div className="p-6 md:p-8 max-w-[1600px] mx-auto">
-      <div className="flex items-end justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Library</h1>
-          <p className="text-slate-400 text-sm">{tracks.length} tracks</p>
-        </div>
-        
-        <label className="flex items-center gap-2 cursor-pointer rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold hover:bg-violet-500 transition-colors shadow-lg shadow-violet-500/20">
-          <Upload className="w-4 h-4" />
-          Upload Music
-          <input
-            type="file"
-            accept=".aac,.flac,.m4a,.mp3,.oga,.ogg,.opus,.wav,.webm,audio/*"
-            className="hidden"
-            onChange={handleUpload}
-          />
-        </label>
-      </div>
-
-      {uploadingFile && (
-        <div className="mb-6 rounded-md border border-violet-500/30 bg-violet-500/10 p-4">
-          <div className="flex justify-between text-sm mb-2 text-violet-200">
-            <span>Uploading: <span className="font-medium text-white">{uploadingFile}</span></span>
-            <span className="font-mono">{uploadProgress}%</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-            <div 
-              className="bg-violet-500 h-2 rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${uploadProgress}%` }}
-            ></div>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-6 rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="space-y-2">
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className="flex h-14 bg-slate-800/50 rounded-md animate-pulse" />
-          ))}
-        </div>
-      ) : tracks.length === 0 ? (
-        <div className="mt-12">
-          <EmptyState 
-            icon={<LibraryIcon />} 
-            title="Your library is empty" 
-            description="Upload some music to get started." 
-          />
-        </div>
-      ) : (
-        <div className="w-full text-left text-sm">
-          <div className="grid grid-cols-[40px_minmax(200px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_80px_40px_40px] gap-4 px-4 py-2 text-slate-400 font-medium border-b border-slate-800 mb-2 uppercase tracking-wider text-xs">
-            <div className="text-center">#</div>
-            <div>Title</div>
-            <div>Artist</div>
-            <div>Album</div>
-            <div className="text-right">Duration</div>
-            <div></div>
-            <div></div>
-          </div>
-          
-          <div className="space-y-1">
-            {tracks.map((track, index) => {
-              const isCurrentTrack = currentTrack?.id === track.id;
-              return (
-                <div 
-                  key={track.id} 
-                  className={`group grid grid-cols-[40px_minmax(200px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_80px_40px_40px] gap-4 items-center px-4 py-2 rounded-md hover:bg-slate-800/80 transition-colors ${isCurrentTrack ? 'bg-slate-800/50' : ''}`}
+    <TrackListPage
+      title={title}
+      eyebrow={eyebrow}
+      filters={{ ...filters, sort: filters.sort ?? defaultSort }}
+      tabs={!scoped}
+      cover={filters.album ? 'album' : filters.artist ? 'artist' : undefined}
+      numbering={filters.album && (filters.sort ?? defaultSort) === 'album-order' ? 'trackNumber' : 'index'}
+      subtitle={
+        chips.length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {chips.map(([label, value, keys]) => (
+              <li key={label} className="max-w-full">
+                <button
+                  type="button"
+                  onClick={() => update(Object.fromEntries(keys.map((key) => [key, undefined])))}
+                  className="chip max-w-full pr-2"
+                  aria-label={`Remove ${label.toLowerCase()} filter`}
                 >
-                  <div className="text-center text-slate-500 relative flex items-center justify-center">
-                    <span className="group-hover:hidden">{index + 1}</span>
-                    <button 
-                      onClick={() => handlePlayTrack(track)}
-                      className="hidden group-hover:flex text-slate-300 hover:text-white"
-                    >
-                      {isCurrentTrack && isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
-                    </button>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 truncate">
-                    <div className="w-10 h-10 rounded bg-slate-800 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                      {track.artworkUrl ? (
-                        <img src={track.artworkUrl} alt={track.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <LibraryIcon className="w-4 h-4 text-slate-500" />
-                      )}
-                    </div>
-                    <span className={`truncate font-medium ${isCurrentTrack ? 'text-violet-400' : 'text-slate-200'}`}>
-                      {track.title}
-                    </span>
-                  </div>
-                  
-                  <div className="truncate text-slate-400">{track.artist ?? 'Unknown artist'}</div>
-                  <div className="truncate text-slate-400">{track.album ?? 'Unknown album'}</div>
-                  <div className="text-right text-slate-400 font-mono text-xs">{formatDuration(track.duration)}</div>
-                  
-                  <div className="flex justify-center">
-                    <button className="text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Heart className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex justify-center">
-                    <button className="text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+                  <span className="text-faint">{label}</span>
+                  <span className="truncate text-fg">{value}</span>
+                  <X className="h-3.5 w-3.5 shrink-0" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      actions={
+        artistOnly ? (
+          <button type="button" onClick={() => void startRadio({ artist: artistOnly })} className="btn-ghost">
+            <Radio weight="bold" className="h-4 w-4" />
+            Radio
+          </button>
+        ) : (
+          !scoped && <UploadButton className="btn-ghost" label="Upload" />
+        )
+      }
+      toolbar={<FilterBar filters={filters} defaultSort={defaultSort} onChange={update} />}
+      empty={
+        scoped || chips.length > 0 || filters.favorite || filters.hasLyrics
+          ? { icon: <MagnifyingGlassMinus weight="light" />, title: 'No matches', description: 'Nothing in the library matches these filters.' }
+          : isAdmin
+            ? {
+                icon: <MusicNotes weight="light" />,
+                title: 'Your library is empty',
+                description: 'Upload music, or drop audio files anywhere on this page.',
+                action: <UploadButton />,
+              }
+            : { icon: <MusicNotes weight="light" />, title: 'Nothing to play yet', description: 'Music shows up here as soon as the admin adds some.' }
+      }
+    />
   );
 }

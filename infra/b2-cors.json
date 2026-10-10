@@ -5,9 +5,8 @@
         "https://new-folder-api-beryl.vercel.app",
         "http://localhost:5173"
       ],
-      "AllowedMethods": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+      "AllowedMethods": ["GET", "HEAD", "PUT"],
       "AllowedHeaders": ["*"],
-      "ExposeHeaders": ["ETag"],
       "MaxAgeSeconds": 3600
     }
   ]

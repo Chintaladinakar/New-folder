@@ -1,138 +1,208 @@
-import { usePlayerStore } from '../stores/playerStore';
-import { 
-  Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
-  Heart, ListMusic, Volume2, VolumeX, Maximize2 
-} from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { CaretDown, Queue, Subtitles, VinylRecord } from '@phosphor-icons/react';
+import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ArtworkBackdrop } from '../components/player/ArtworkBackdrop';
+import { LyricsPanel } from '../components/player/Lyrics';
+import { FavoriteButton, SeekBar, TrackCredits, TransportControls, VolumeControl } from '../components/player/PlayerControls';
+import { PlayerTabs } from '../components/player/PlayerTabs';
+import { Artwork } from '../components/ui/Artwork';
+import { EmptyState } from '../components/ui/EmptyState';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { usePageTitle } from '../hooks/usePageTitle';
+import { dominantColor } from '../lib/color';
+import { spring } from '../lib/motion';
+import { navigateWithTransition } from '../lib/viewTransition';
+import { currentTrackOf, usePlayerStore } from '../stores/playerStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import type { Track } from '../types';
+
+/** Tints the page with the cover's colour; falls back to the accent when the image can't be read. */
+function useTint(artworkUrl: string | null) {
+  const enabled = useSettingsStore((state) => state.dynamicBackground);
+  const [tint, setTint] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !artworkUrl) {
+      setTint(null);
+      return;
+    }
+    let cancelled = false;
+    dominantColor(artworkUrl).then((color) => !cancelled && setTint(color));
+    return () => {
+      cancelled = true;
+    };
+  }, [artworkUrl, enabled]);
+
+  return enabled ? (tint ?? 'var(--c-accent)') : null;
+}
+
+/**
+ * The cover itself, blurred and moving, behind the whole player. Under it, a soft wash of the
+ * cover's colour from the top corner: what shows for tracks without artwork, or while it loads.
+ */
+function Backdrop({ track, isPlaying }: { track: Track; isPlaying: boolean }) {
+  const color = useTint(track.artworkUrl);
+  if (!color) return null;
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div
+        key={color}
+        className="absolute inset-0 animate-fade-in"
+        style={{
+          background: `radial-gradient(110% 70% at 12% 0%, rgb(${color} / 0.3), transparent 65%), radial-gradient(80% 60% at 100% 100%, rgb(${color} / 0.12), transparent 70%)`,
+        }}
+      />
+      <ArtworkBackdrop src={track.artworkUrl} playing={isPlaying} />
+    </div>
+  );
+}
+
+/**
+ * Pausing shrinks the cover slightly, so the state is visible without reading the button.
+ * It shares a view-transition-name with the mini player's artwork, so it grows out of it.
+ */
+function Cover({ track, isPlaying, className = '' }: { track: Track; isPlaying: boolean; className?: string }) {
+  return (
+    <motion.div animate={{ transform: isPlaying ? 'scale(1)' : 'scale(0.94)' }} transition={spring} className={`player-art ${className}`}>
+      <Artwork src={track.artworkUrl} title={track.title} className="aspect-square w-full rounded-lg shadow-cover" textClassName="text-[9rem]" />
+    </motion.div>
+  );
+}
+
+function Heading({ track }: { track: Track }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="min-w-0 flex-1">
+        {/* Scales with the window's height as well as its width, so short windows keep room for the cover. */}
+        <h1 className="line-clamp-3 font-display text-[length:clamp(2.25rem,min(4.2vw,6.5vh),3.75rem)] leading-[0.98] tracking-[-0.01em] [overflow-wrap:anywhere]">
+          {track.title}
+        </h1>
+        <TrackCredits track={track} className="mt-3 text-base" />
+      </div>
+      <FavoriteButton className="-mr-2 mt-1 [&>svg]:h-6 [&>svg]:w-6" />
+    </div>
+  );
+}
 
 export function NowPlaying() {
-  const {
-    currentTrack,
-    isPlaying,
-    currentTime,
-    duration,
-    volume,
-    isMuted,
-    shuffle,
-    repeat,
-    setIsPlaying,
-    setCurrentTime,
-    toggleShuffle,
-    toggleRepeat,
-    setVolume,
-    setIsMuted,
-    playNext,
-    playPrevious,
-  } = usePlayerStore();
-
+  const track = usePlayerStore(currentTrackOf);
+  usePageTitle(track ? `${track.title}${track.artist ? ` — ${track.artist}` : ''}` : 'Now playing');
+  const isPlaying = usePlayerStore((state) => state.isPlaying);
+  const error = usePlayerStore((state) => state.error);
+  const upNext = usePlayerStore((state) => Math.max(0, state.order.length - state.position - 1));
+  const setQueueOpen = usePlayerStore((state) => state.setQueueOpen);
+  const lyricsAutoShow = useSettingsStore((state) => state.lyricsAutoShow);
+  const [showLyrics, setShowLyrics] = useState(lyricsAutoShow);
+  const wide = useMediaQuery('(min-width: 1024px)');
   const navigate = useNavigate();
 
-  const formatTime = (time: number) => {
-    if (isNaN(time)) return '0:00';
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = Number(e.target.value);
-    setCurrentTime(newTime);
-  };
-
-  if (!currentTrack) {
+  if (!track) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[60vh]">
-        <div className="text-slate-400 mb-4">No track is currently playing</div>
-        <button 
-          onClick={() => navigate('/library')}
-          className="rounded-full bg-violet-600 px-6 py-2.5 text-sm font-semibold hover:bg-violet-500 transition-colors"
-        >
-          Go to Library
-        </button>
+      <div className="page">
+        <EmptyState
+          icon={<VinylRecord weight="light" />}
+          title="Nothing is playing"
+          description="Pick something from your library and it will show up here."
+          action={
+            <Link to="/library" className="btn-primary">
+              Browse songs
+            </Link>
+          }
+        />
       </div>
     );
   }
 
-  return (
-    <div className="p-6 md:p-12 max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
-      <div className="w-full max-w-md aspect-square rounded-xl overflow-hidden bg-slate-800 shadow-2xl shadow-black/50 mb-10 flex items-center justify-center">
-        {currentTrack.artworkUrl ? (
-          <img src={currentTrack.artworkUrl} alt={currentTrack.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-violet-900 to-slate-900 flex items-center justify-center">
-            <span className="text-6xl font-bold text-slate-500">{currentTrack.title.slice(0, 1).toUpperCase()}</span>
+  // Opened directly (no history to go back to): close to Home instead of leaving the app.
+  // The cover shrinks back into the mini player on the way out.
+  const close = () => navigateWithTransition(() => ((window.history.state as { idx?: number } | null)?.idx ? navigate(-1) : navigate('/')));
+  const alert = error && (
+    <p role="alert" className="mt-4 text-sm text-danger">
+      {error}
+    </p>
+  );
+
+  if (wide) {
+    return (
+      <div className="relative isolate h-full">
+        <Backdrop track={track} isPlaying={isPlaying} />
+        <div className="mx-auto grid h-full max-w-[1400px] grid-cols-2 gap-14 px-12 py-8 xl:gap-20">
+          {/* Only the cover flexes: it takes the height the text and controls leave (cqw/cqh of its
+              area), so the player always fits the window instead of scrolling. */}
+          <div className="mx-auto flex w-full max-w-[36rem] flex-col">
+            <div className="flex min-h-[8rem] flex-1 items-center justify-center [container-type:size]">
+              <Cover track={track} isPlaying={isPlaying} className="w-[min(100cqw,100cqh)]" />
+            </div>
+            <div className="mt-6">
+              <Heading track={track} />
+            </div>
+            {alert}
+            <div className="mt-5">
+              <SeekBar size="lg" stacked />
+            </div>
+            <div className="mx-auto mt-1 w-full max-w-sm">
+              <TransportControls size="lg" />
+            </div>
+            <VolumeControl wide className="mx-auto mt-3 w-full max-w-[16rem]" />
           </div>
-        )}
-      </div>
-
-      <div className="w-full max-w-md flex flex-col items-center text-center mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">{currentTrack.title}</h1>
-        <p className="text-lg text-slate-400">{currentTrack.artist ?? 'Unknown artist'}</p>
-        <p className="text-sm text-slate-500 mt-1">{currentTrack.album ?? 'Unknown album'}</p>
-      </div>
-
-      <div className="w-full max-w-2xl px-6">
-        <div className="flex items-center gap-4 mb-8">
-          <span className="text-xs font-medium text-slate-400 w-12 text-right">{formatTime(currentTime)}</span>
-          <input
-            type="range"
-            min={0}
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            className="w-full h-2 bg-slate-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+          <PlayerTabs
+            initialTab={lyricsAutoShow ? 'lyrics' : 'queue'}
+            lyricsSize="large"
+            className="min-h-0 overflow-hidden rounded-2xl border border-edge bg-surface/50 backdrop-blur-sm"
           />
-          <span className="text-xs font-medium text-slate-400 w-12 text-left">{formatTime(duration)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // A flex column of the screen's exact height: the cover (or lyrics) area takes whatever the
+  // controls leave, so everything fits and the controls sit at the bottom, within thumb reach.
+  return (
+    <div className="relative isolate flex h-full flex-col">
+      <Backdrop track={track} isPlaying={isPlaying} />
+      <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] md:pt-6">
+        <div className="flex items-center justify-between">
+          <button type="button" onClick={close} className="icon-btn -ml-2" aria-label="Close player">
+            <CaretDown weight="bold" className="h-6 w-6" />
+          </button>
+          <p className="truncate px-3 text-xs font-medium text-muted">{track.album ?? 'Now playing'}</p>
+          <span className="w-10" aria-hidden="true" />
         </div>
 
-        <div className="flex items-center justify-between max-w-sm mx-auto">
-          <button 
-            onClick={toggleShuffle}
-            className={`p-2 rounded-full transition-colors ${shuffle ? 'text-violet-500' : 'text-slate-400 hover:text-white'}`}
-          >
-            <Shuffle className="w-5 h-5" />
-          </button>
-          
-          <button 
-            onClick={playPrevious}
-            className="p-2 rounded-full text-slate-300 hover:text-white transition-colors"
-          >
-            <SkipBack className="w-8 h-8 fill-current" />
-          </button>
-          
-          <button 
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="p-4 rounded-full bg-white text-slate-900 hover:scale-105 transition-transform shadow-lg shadow-white/10"
-          >
-            {isPlaying ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current translate-x-1" />}
-          </button>
-          
-          <button 
-            onClick={playNext}
-            className="p-2 rounded-full text-slate-300 hover:text-white transition-colors"
-          >
-            <SkipForward className="w-8 h-8 fill-current" />
-          </button>
-          
-          <button 
-            onClick={toggleRepeat}
-            className={`p-2 rounded-full transition-colors relative ${repeat !== 'off' ? 'text-violet-500' : 'text-slate-400 hover:text-white'}`}
-          >
-            <Repeat className="w-5 h-5" />
-            {repeat === 'one' && (
-              <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-violet-500 text-white rounded-full w-4 h-4 flex items-center justify-center">1</span>
-            )}
-          </button>
+        <div className="my-6 flex min-h-[10rem] flex-1 flex-col items-center justify-center [container-type:size]">
+          {showLyrics ? (
+            <LyricsPanel track={track} size="large" className="w-full flex-1" />
+          ) : (
+            <Cover track={track} isPlaying={isPlaying} className="w-[min(100cqw,100cqh)]" />
+          )}
         </div>
-        
-        <div className="flex justify-between items-center mt-12 px-8">
-           <button className="text-slate-400 hover:text-white p-2">
-            <Heart className="w-6 h-6" />
-           </button>
-           <button className="text-slate-400 hover:text-white p-2">
-            <ListMusic className="w-6 h-6" />
-           </button>
+
+        <Heading track={track} />
+        {alert}
+        <div className="mt-6">
+          <SeekBar size="lg" stacked />
+        </div>
+        <div className="mt-2">
+          <TransportControls size="lg" />
+        </div>
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setShowLyrics(!showLyrics)}
+            aria-pressed={showLyrics}
+            className={`btn-ghost btn-sm -ml-3 ${showLyrics ? 'text-fg' : ''}`}
+          >
+            <Subtitles weight={showLyrics ? 'fill' : 'regular'} className="h-4 w-4" />
+            Lyrics
+          </button>
+          {/* Phones have volume buttons; a slider is for larger screens. */}
+          <VolumeControl className="hidden md:flex" />
+          <button type="button" onClick={() => setQueueOpen(true)} className="btn-ghost btn-sm -mr-3">
+            <Queue className="h-4 w-4" />
+            Up next
+            {upNext > 0 && <span className="font-mono text-[11px] text-faint">{upNext}</span>}
+          </button>
         </div>
       </div>
     </div>

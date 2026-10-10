@@ -31,3 +31,7 @@ coverage/
 .tmp/
 tmp/
 *.tsbuildinfo
+
+# Browser-test build (points at the test API) and results
+apps/web/dist-e2e/
+apps/e2e/results/
